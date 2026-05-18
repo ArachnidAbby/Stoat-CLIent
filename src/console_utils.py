@@ -27,8 +27,8 @@ def convert_to_ansi(r, g, b):
     return f"\u001b[38;5;{final_code}m"
 
 def reset_screen():
-    reset_cursor()
     sys.stdout.flush()
+    reset_cursor()
 
 def horiz_line(columns) -> str:
     return linify("\u001b[1000D"+ ("─"*columns), columns)
@@ -40,6 +40,7 @@ def move_full_left():
     sys.stdout.write(u"\u001b[1000D")
 
 def reset_cursor():
+    sys.stdout.write(u"\u001b[?25l")
     sys.stdout.write(u"\u001b[1000D")
     sys.stdout.write(u"\u001b[1000A")
 

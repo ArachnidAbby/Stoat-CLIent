@@ -127,8 +127,8 @@ class ConsoleProgram():
                 self.inputs(i, char, key)
 
             sys.stdout.write("\n".join(self.lines))
-            sys.stdout.write(f"\u001b[{self.cursor_row + self.term_size.lines-1};{self.cursor_col + 3}H")
-            sys.stdout.flush()
+            sys.stdout.write(f"\u001b[{self.cursor_row + self.term_size.lines-1};{self.cursor_col + 3}H\u001b[?25h")
+
             time.sleep(0.05)
         enter_standard_mode()
 
