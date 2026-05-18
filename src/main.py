@@ -22,6 +22,7 @@ from stoat import (
 )
 
 from console_utils import (
+    BACKSPACE,
     change_win_title,
     enter_alternative_mode,
     enter_standard_mode,
@@ -288,7 +289,7 @@ class ConsoleProgram:
                 self.scroll_offset = min(self.scroll_offset + 1, 0)
         elif key == 22:  # ctl+v
             self.chat_buffer += pyperclip.paste()
-        elif key == 8 and len(self.chat_buffer) > 0:  # backspace
+        elif key == BACKSPACE and len(self.chat_buffer) > 0:  # backspace
             if len(self.chat_buffer) == 1:
                 self.stop_typing()
             self.cursor_col -= 1
@@ -306,6 +307,8 @@ async def main(client: MyClient):
     asyncio.run_coroutine_threadsafe(client.start(), asyncio.get_running_loop())
     try:
         while True:
+            if not console.running:
+                break
             while len(client.custom_events) > 0 and (
                 event := client.custom_events.pop()
             ):

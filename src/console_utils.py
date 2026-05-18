@@ -14,6 +14,8 @@ MAGIC = 240 ** (1 / 3)  # represents a third of the color cube for ANSI 256 colo
 if sys.platform == "win32":
     import msvcrt
 
+    BACKSPACE = 8
+
     def setup_terminal():
         pass
 
@@ -29,6 +31,8 @@ else:
     import termios
     import atexit
 
+    BACKSPACE = 127
+
     def enable_echo(fd, enabled):
         iflag, oflag, cflag, lflag, ispeed, ospeed, cc = termios.tcgetattr(fd)
 
@@ -42,7 +46,6 @@ else:
 
     def setup_terminal():
         tty.setcbreak(sys.stdin)
-        tty.setraw(sys.stdin)
         enable_echo(sys.stdin.fileno(), False)
         atexit.register(enable_echo, sys.stdin.fileno(), True)
 
