@@ -14,6 +14,9 @@ MAGIC = 240 ** (1 / 3)  # represents a third of the color cube for ANSI 256 colo
 if sys.platform == "win32":
     import msvcrt
 
+    def setup_terminal():
+        pass
+
     def next_char():
         return msvcrt.getch()
 
@@ -22,12 +25,16 @@ if sys.platform == "win32":
 
 else:
     import tty
+    import select
+
+    def setup_terminal():
+        tty.setraw(sys.stdin)
 
     def next_char():
         return sys.stdin.read(1)
 
     def has_char():
-        return sys.getsizeof(sys.stdin) > 0
+        return not select.select([sys.stdin], [], [], 0)
 
 
 def convert_to_ansi(r, g, b):

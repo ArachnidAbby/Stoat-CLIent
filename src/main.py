@@ -33,6 +33,7 @@ from console_utils import (
     ORANGE,
     RED,
     RESET,
+    setup_terminal,
 )
 from message_formatting import format_server_message
 
@@ -123,6 +124,7 @@ class ConsoleProgram:
             c += 1
 
     def start(self):
+        setup_terminal()
         change_win_title("Stoat!")
         enter_alternative_mode(self.term_size)
         self.running = True
