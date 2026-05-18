@@ -1,6 +1,5 @@
 import asyncio
 from enum import IntEnum, auto
-import msvcrt
 import os
 import sys
 import threading
@@ -26,8 +25,10 @@ from console_utils import (
     change_win_title,
     enter_alternative_mode,
     enter_standard_mode,
+    has_char,
     horiz_line,
     linify,
+    next_char,
     reset_screen,
     ORANGE,
     RED,
@@ -144,8 +145,8 @@ class ConsoleProgram:
             reset_screen()
             self.draw(i)
 
-            if msvcrt.kbhit():
-                char = msvcrt.getch()
+            if has_char():
+                char = next_char()
                 key = ord(char)
                 self.inputs(i, char, key)
 
@@ -269,7 +270,7 @@ class ConsoleProgram:
         elif key == 9 and self.mode == ConsoleProgram.Modes.COMMANDMODE:
             self.mode = ConsoleProgram.Modes.TEXTMODE
         elif key == 224:
-            char = msvcrt.getch()
+            char = next_char()
             key = ord(char)
             if key == 75:  # left arrow
                 self.cursor_col = max(self.cursor_col - 1, 0)

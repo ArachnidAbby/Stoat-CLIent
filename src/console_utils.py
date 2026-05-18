@@ -1,4 +1,5 @@
 import math
+import os
 import sys
 
 RED = "\u001b[31m"
@@ -9,6 +10,24 @@ ORANGE = "\u001b[38;5;208m"  # used for mentions
 
 
 MAGIC = 240 ** (1 / 3)  # represents a third of the color cube for ANSI 256 color
+
+if sys.platform == "win32":
+    import msvcrt
+
+    def next_char():
+        return msvcrt.getch()
+
+    def has_char():
+        return msvcrt.kbhit()
+
+else:
+    import tty
+
+    def next_char():
+        return sys.stdin.read(1)
+
+    def has_char():
+        return sys.getsizeof(sys.stdin) > 0
 
 
 def convert_to_ansi(r, g, b):
