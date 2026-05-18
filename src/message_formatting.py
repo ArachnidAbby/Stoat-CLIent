@@ -8,7 +8,7 @@ from console_utils import BOLD, ORANGE, RESET, convert_to_ansi
 def convert_role_color_to_ansi(color: str):
     if not color.startswith("#") or not len(color) == 7:
         return RESET
-    r, g, b = (int("0x" + str(color[i*2 + 1: i*2+3]), base=0) for i in range(3))
+    r, g, b = (int("0x" + str(color[i * 2 + 1 : i * 2 + 3]), base=0) for i in range(3))
     return convert_to_ansi(r, g, b)
 
 
@@ -18,8 +18,8 @@ def replace_mentions(message: Message, me: OwnUser) -> str:
     output = message.content
 
     # user mentions
-    while match:=re.search(r"\<@(.{26})\>", output):
-        id = match.group()[2: -1]
+    while match := re.search(r"\<@(.{26})\>", output):
+        id = match.group()[2:-1]
 
         user = None
         for mention in message.mentions_as_members:
@@ -27,14 +27,16 @@ def replace_mentions(message: Message, me: OwnUser) -> str:
                 user = mention
 
         if user is not None:
-            output = output.replace(match.group(), f"{ORANGE}@{user.display_name or user.name}{RESET}")
+            output = output.replace(
+                match.group(), f"{ORANGE}@{user.display_name or user.name}{RESET}"
+            )
             continue
 
         output = output.replace(match.group(), f"<{ORANGE}@{id}{RESET}>")
 
     # Role mentions
-    while match:=re.search(r"\<%(.{26})\>", output):
-        id = match.group()[2: -1]
+    while match := re.search(r"\<%(.{26})\>", output):
+        id = match.group()[2:-1]
 
         role = None
         for mention in message.role_mentions:
@@ -42,14 +44,17 @@ def replace_mentions(message: Message, me: OwnUser) -> str:
                 role = mention
 
         if role is not None:
-            output = output.replace(match.group(), f"{convert_role_color_to_ansi(role.color or "#FFFFFF")}@{role.name}{RESET}")
+            output = output.replace(
+                match.group(),
+                f"{convert_role_color_to_ansi(role.color or "#FFFFFF")}@{role.name}{RESET}",
+            )
             continue
 
         output = output.replace(match.group(), f"<{ORANGE}%{id}{RESET}>")
 
     # Channel mentions
-    while match:=re.search(r"\<#(.{26})\>", output):
-        id = match.group()[2: -1]
+    while match := re.search(r"\<#(.{26})\>", output):
+        id = match.group()[2:-1]
 
         channel = None
         for server_channel in message.server.channels:
@@ -63,6 +68,7 @@ def replace_mentions(message: Message, me: OwnUser) -> str:
         output = output.replace(match.group(), f"<{BOLD}#{id}{RESET}>")
 
     return output
+
 
 def format_server_message(me: OwnUser, message: Message, compact_mode=True) -> str:
     if not isinstance(message.author, Member):
@@ -88,5 +94,3 @@ def format_server_message(me: OwnUser, message: Message, compact_mode=True) -> s
     mentioned = any(mention.id == me.id for mention in message.mentions)
 
     return f"{ORANGE if mentioned else RESET}{channel_prefix}[{message.created_at.astimezone().strftime("%Y-%m-%d %H:%M:%S")}][{user_role_color}{message.author.display_name or message.author.name}{ORANGE if mentioned else RESET}]:{" " if compact_mode else "\n"}{replace_mentions(message, me)} "
-
-
