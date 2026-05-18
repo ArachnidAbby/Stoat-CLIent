@@ -1,5 +1,30 @@
+import math
 import sys
 
+RED = u"\u001b[31m"
+RESET = u"\u001b[0m"
+BOLD = u'\u001b[1m'
+BLACK_BG = u'\u001b[40m'
+ORANGE = u"\u001b[38;5;208m" # used for mentions
+
+
+MAGIC = 240 ** (1/3) # represents a third of the color cube for ANSI 256 color
+
+
+def convert_to_ansi(r, g, b):
+    r_percent = r/256
+    g_percent = g/256
+    b_percent = b/256
+
+    cube_width = MAGIC
+
+    ansi_r = r_percent * cube_width # goes 0 - cube_width
+    ansi_g = max(g_percent * cube_width - 1, 0)
+    ansi_b = b_percent * cube_width
+
+    final_code = min(16 + math.ceil(ansi_g + (ansi_b * cube_width) + (ansi_r * cube_width**2)), 256)
+
+    return f"\u001b[38;5;{final_code}m"
 
 def reset_screen():
     sys.stdout.flush()
@@ -7,7 +32,7 @@ def reset_screen():
     sys.stdout.write(u"\u001b[1000A")
 
 
-def write_horiz_line(columns) -> str:
+def horiz_line(columns) -> str:
     return linify("\u001b[1000D"+ ("─"*columns) + "\n", columns)
 
 def change_win_title(title: str):

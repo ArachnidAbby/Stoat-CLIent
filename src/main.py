@@ -10,8 +10,8 @@ import tomllib
 import pyperclip
 from stoat import Channel, Client, DMChannel, Member, Message, NotFound, OwnUser, Server, TextChannel, TextableChannel
 
-from console_utils import change_win_title, linify, reset_screen
-from message_formatting import ORANGE, RED, RESET, format_server_message
+from console_utils import change_win_title, horiz_line, linify, reset_screen, ORANGE, RED, RESET
+from message_formatting import format_server_message
 
 import platform
 
@@ -148,9 +148,7 @@ class ConsoleProgram():
         for c, message in enumerate(self.chat_messages[messages_start:messages_end]):
             self.lines[c+2] = linify(f"{message}", self.term_size.columns)
 
-        # sys.stdout.write(f"\u001b[{term_size.lines - 2};0H")
-        self.lines[self.term_size.lines-3] = linify("─"*self.term_size.columns, self.term_size.columns)
-        # sys.stdout.write(f"\u001b[{term_size.lines - 1};0H")
+        self.lines[self.term_size.lines-3] = horiz_line(self.term_size.columns)
 
         self.lines[self.term_size.lines-2] = linify(f"{"»" * (frameno//5 %2) + " " * ((frameno//5-1)%2)} {self.chat_buffer}", self.term_size.columns)
         self.lines[self.term_size.lines-1] = linify(self.special_message, self.term_size.columns)
