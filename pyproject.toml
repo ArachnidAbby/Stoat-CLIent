@@ -1,0 +1,15 @@
+[project]
+name = "stoat-client"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "colorama>=0.4.6",
+    "console>=0.9912",
+    "pyperclip>=1.11.0",
+    "pywin32>=311",
+    "stoat-py>=1.2.1",
+    "types-pywin32>=311.0.0.20260508",
+    "windows-curses>=2.4.2",
+]
