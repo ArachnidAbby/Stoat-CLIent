@@ -15,6 +15,16 @@ if sys.platform == "win32":
     import msvcrt
 
     BACKSPACE = 8
+    LEFT_ARROW = 75
+    RIGHT_ARROW = 77
+    UP_ARROW = 72
+    DOWN_ARROW = 80
+    PG_UP = 73
+    PG_DOWN = 81
+    ENTER = 13
+
+    def arrow_pressed(key: int):
+        return key == 224
 
     def setup_terminal():
         pass
@@ -32,6 +42,18 @@ else:
     import atexit
 
     BACKSPACE = 127
+    LEFT_ARROW = 68
+    RIGHT_ARROW = 67
+    UP_ARROW = 65
+    DOWN_ARROW = 66
+    PG_UP = 53
+    PG_DOWN = 54
+    ENTER = 10
+
+    def arrow_pressed(key: int):
+        if key != 27:
+            return False
+        return next_char() == 91
 
     def enable_echo(fd, enabled):
         iflag, oflag, cflag, lflag, ispeed, ospeed, cc = termios.tcgetattr(fd)

@@ -23,6 +23,14 @@ from stoat import (
 
 from console_utils import (
     BACKSPACE,
+    DOWN_ARROW,
+    ENTER,
+    LEFT_ARROW,
+    PG_DOWN,
+    PG_UP,
+    RIGHT_ARROW,
+    UP_ARROW,
+    arrow_pressed,
     change_win_title,
     enter_alternative_mode,
     enter_standard_mode,
@@ -266,26 +274,26 @@ class ConsoleProgram:
     def inputs(self, frameno, char: bytes, key: int):
         if key == 17 or key == 3:  # ctrl + q or ctrl+c
             self.running = False
-        elif key == 13:  # enter
+        elif key == ENTER:  # enter
             self.send_chat_buffer()
         elif key == 9 and self.mode == ConsoleProgram.Modes.TEXTMODE:
             self.mode = ConsoleProgram.Modes.COMMANDMODE
         elif key == 9 and self.mode == ConsoleProgram.Modes.COMMANDMODE:
             self.mode = ConsoleProgram.Modes.TEXTMODE
-        elif key == 224:
+        elif arrow_pressed(key):
             char = next_char()
             key = ord(char)
-            if key == 75:  # left arrow
+            if key == LEFT_ARROW:  # left arrow
                 self.cursor_col = max(self.cursor_col - 1, 0)
-            elif key == 77:  # right arrow
+            elif key == RIGHT_ARROW:  # right arrow
                 self.cursor_col = min(self.cursor_col + 1, len(self.chat_buffer))
-            elif key == 72:  # up arrow
+            elif key == UP_ARROW:  # up arrow
                 self.cursor_row = max(self.cursor_row - 1, 0)
-            elif key == 80:  # down arrow
+            elif key == DOWN_ARROW:  # down arrow
                 self.cursor_row = min(self.cursor_row + 1, self.chat_buffer.count("\n"))
-            elif key == 73:  # pgup
+            elif key == PG_UP:  # pgup
                 self.scroll_offset -= 1
-            elif key == 81:  # pgdown
+            elif key == PG_DOWN:  # pgdown
                 self.scroll_offset = min(self.scroll_offset + 1, 0)
         elif key == 22:  # ctl+v
             self.chat_buffer += pyperclip.paste()
