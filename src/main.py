@@ -87,7 +87,8 @@ class ConsoleProgram():
         self.total_lines += msg.count("\n")
         lines = msg.split("\n")
         c = 0
-        while len(lines) > 0 and (line:=lines.pop(0)):
+        while len(lines) > 0:
+            line=lines.pop(0)
             if len(line) > self.term_size.columns:
                 lines.append(line[self.term_size.columns:])
                 line = "║ " + line[:self.term_size.columns]
@@ -132,13 +133,19 @@ class ConsoleProgram():
         sys.stdout.write("\u001b[?1049l")
 
     def draw(self, frameno: int):
-        if self.scroll_offset != 0 and self.last_line_count<self.total_lines:
+        self.total_lines = len(self.chat_messages)
+        if self.scroll_offset < 0 and self.last_line_count<self.total_lines:
             self.scroll_offset -= self.total_lines-self.last_line_count # keep scroll offset
 
-        if self.server is not None:
-            self.lines[0] = f"> {self.server.name} # {"?" if self.active_channel is None else self.active_channel.name}"
+        self.last_line_count = self.total_lines
 
-        for c, message in enumerate(self.chat_messages[max((-self.message_lines)+self.scroll_offset, -len(self.chat_messages)):]):
+        self.lines[0] = linify(f"{self.scroll_offset} > ? # ?", self.term_size.columns)
+        if self.server is not None:
+            self.lines[0] = linify(f"{self.scroll_offset} > {self.server.name} # {"?" if self.active_channel is None else self.active_channel.name}", self.term_size.columns)
+
+        messages_start = max((-self.message_lines)+self.scroll_offset-1, -len(self.chat_messages))
+        messages_end = messages_start + self.message_lines + len(self.chat_messages) + 1
+        for c, message in enumerate(self.chat_messages[messages_start:messages_end]):
             self.lines[c+2] = linify(f"{message}", self.term_size.columns)
 
         # sys.stdout.write(f"\u001b[{term_size.lines - 2};0H")
@@ -152,25 +159,41 @@ class ConsoleProgram():
         if self.server is not None and self.active_channel is not None:
             self.client.custom_events.append(self.active_channel.end_typing())
 
+    def start_typing(self):
+        if self.server is not None and self.active_channel is not None:
+            self.client.custom_events.append(self.active_channel.begin_typing())
+
     def send_chat_buffer(self):
         if self.mode == ConsoleProgram.Modes.COMMANDMODE:
-            if self.chat_buffer.lower() == "list":
-                 self.add_chat_message("\n- "+ "\n- ".join(f"{server.name}: {server.id}" for server in self.client.servers.values()))
-            if self.chat_buffer.startswith("> "):
+            if self.chat_buffer.lower() == "servers":
+                 self.add_chat_message("Servers:\n- "+ "\n- ".join(f"{c}) {server.name}: {server.id}" for c, server in enumerate(self.client.servers.values())))
+            elif self.chat_buffer.lower() == "channels" and self.server is not None:
+                 self.add_chat_message("Channels:\n- "+ "\n- ".join(f"{c}) {channel.name}: {channel.id}" for c, channel in enumerate(self.server.channels)))
+
+            elif self.chat_buffer.startswith("> "):
                 for server in self.client.servers.values():
                     if server.name == self.chat_buffer.removeprefix("> "):
                         self.stop_typing()
                         self.server = server
-            if self.chat_buffer.startswith("# ") and self.server is not None:
+                        break
+                else:
+                    if self.chat_buffer.removeprefix("> ").isnumeric() and '.' not in self.chat_buffer:
+                        self.server = list(self.client.servers.values())[int(self.chat_buffer.removeprefix("> "))]
+            elif self.chat_buffer.startswith("# ") and self.server is not None:
                 for channel in self.server.channels:
                     if channel.name == self.chat_buffer.removeprefix("# "):
                         self.stop_typing()
                         self.active_channel = channel
-            if self.chat_buffer == "q":
+                        break
+                else:
+                    if self.chat_buffer.removeprefix("# ").isnumeric() and '.' not in self.chat_buffer:
+                        self.active_channel = self.server.channels[int(self.chat_buffer.removeprefix("# "))]
+            elif self.chat_buffer == "q":
                 self.running = False
         elif self.mode == ConsoleProgram.Modes.TEXTMODE and self.active_channel is not None:
+            self.stop_typing()
             self.client.custom_events.append(self.active_channel.send(self.chat_buffer))
-            self.add_chat_message("SENT A MESSAGE")
+            self.add_chat_message("-- SENT A MESSAGE --")
 
         self.chat_buffer = ""
         self.cursor_col = 0
@@ -181,7 +204,7 @@ class ConsoleProgram():
             self.running = False
         elif key == 13: # enter
             self.send_chat_buffer()
-        elif key == 9 and self.mode == ConsoleProgram.Modes.TEXTMODE: # tab #TODO command buffer
+        elif key == 9 and self.mode == ConsoleProgram.Modes.TEXTMODE:
             self.mode = ConsoleProgram.Modes.COMMANDMODE
         elif key==9 and self.mode == ConsoleProgram.Modes.COMMANDMODE:
             self.mode = ConsoleProgram.Modes.TEXTMODE
@@ -199,13 +222,16 @@ class ConsoleProgram():
             elif key == 73: # pgup
                 self.scroll_offset -= 1
             elif key == 81: # pgdown
-                self.scroll_offset = max(self.cursor_row+1, 0)
+                self.scroll_offset = min(self.scroll_offset+1,0)
         elif key == 22: # ctl+v
             self.chat_buffer += pyperclip.paste()
         elif key == 8 and len(self.chat_buffer) > 0: # backspace
+            if len(self.chat_buffer) == 1:
+                self.stop_typing()
             self.cursor_col -=1
             self.chat_buffer = self.chat_buffer[0:-1]
         elif 126>=key>=32:
+            self.start_typing()
             self.chat_buffer += char.decode('latin-1')
             self.cursor_col +=1
 
