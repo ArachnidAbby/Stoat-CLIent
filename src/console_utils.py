@@ -31,7 +31,7 @@ else:
         tty.setcbreak(sys.stdin)
 
     def next_char():
-        return sys.stdin.read(1)
+        return sys.stdin.read(1).encode()
 
     def has_char():
         return True
