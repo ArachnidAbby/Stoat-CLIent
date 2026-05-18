@@ -10,10 +10,11 @@ import tomllib
 import pyperclip
 from stoat import Channel, Client, DMChannel, Member, Message, NotFound, OwnUser, Server, TextChannel, TextableChannel
 
-from console_utils import change_win_title, horiz_line, linify, reset_screen, ORANGE, RED, RESET
+from console_utils import change_win_title, enter_alternative_mode, enter_standard_mode, horiz_line, linify, reset_screen, ORANGE, RED, RESET
 from message_formatting import format_server_message
 
 import platform
+
 
 if platform.system() == 'Windows':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -100,15 +101,14 @@ class ConsoleProgram():
 
     def start(self):
         change_win_title("Stoat!")
-        sys.stdout.write(f"\u001b[?1049h\u001b[2J\u001b[0;{self.term_size.lines}r")
-        sys.stdout.flush()
+        enter_alternative_mode(self.term_size)
         self.running = True
 
         def main_wrapped():
             try:
                 self.main()
             finally:
-                sys.stdout.write("\u001b[?1049l")
+                enter_standard_mode()
 
         console_thread = threading.Thread(name="console_thread", target=main_wrapped, args=(), daemon=True)
         console_thread.start()
@@ -130,7 +130,7 @@ class ConsoleProgram():
             sys.stdout.write(f"\u001b[{self.cursor_row + self.term_size.lines-1};{self.cursor_col + 3}H")
             sys.stdout.flush()
             time.sleep(0.05)
-        sys.stdout.write("\u001b[?1049l")
+        enter_standard_mode()
 
     def draw(self, frameno: int):
         self.total_lines = len(self.chat_messages)
