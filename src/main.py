@@ -68,7 +68,7 @@ class MyClient(Client):
         if self.me is None:
             return
 
-        msg = format_server_message(self.me, message, False)
+        msg = format_server_message(self.me, message, AppConfig.compact_mode)
         console.add_chat_message(msg)
 
 
@@ -323,6 +323,7 @@ class AppConfig(
 ):
     stoat_token = spec.Text("")
     debug = spec.Boolean(False)
+    compact_mode = spec.Boolean(False)
 
 
 if __name__ == "__main__":
