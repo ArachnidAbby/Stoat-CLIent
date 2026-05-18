@@ -34,7 +34,7 @@ else:
         return sys.stdin.read(1)
 
     def has_char():
-        return not select.select([sys.stdin], [], [], 0)
+        return True
 
 
 def convert_to_ansi(r, g, b):
