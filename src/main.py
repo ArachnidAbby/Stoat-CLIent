@@ -328,9 +328,6 @@ class AppConfig(
 
 
 if __name__ == "__main__":
-    with open("../stoat_config.toml") as f:
-        config = tomllib.loads(f.read())
-
     if AppConfig.stoat_token == "":
         print("Please enter in a stoat token in your config file")
         exit(1)
