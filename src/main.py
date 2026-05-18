@@ -263,7 +263,7 @@ class ConsoleProgram:
         self.cursor_row = 0
 
     def inputs(self, frameno, char: bytes, key: int):
-        if key == 17:  # ctrl + q
+        if key == 17 or key == 3:  # ctrl + q or ctrl+c
             self.running = False
         elif key == 13:  # enter
             self.send_chat_buffer()

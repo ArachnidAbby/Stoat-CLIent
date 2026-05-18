@@ -26,9 +26,25 @@ if sys.platform == "win32":
 else:
     import tty
     import select
+    import termios
+    import atexit
+
+    def enable_echo(fd, enabled):
+        iflag, oflag, cflag, lflag, ispeed, ospeed, cc = termios.tcgetattr(fd)
+
+        if enabled:
+            lflag |= termios.ECHO
+        else:
+            lflag &= ~termios.ECHO
+
+        new_attr = [iflag, oflag, cflag, lflag, ispeed, ospeed, cc]
+        termios.tcsetattr(fd, termios.TCSANOW, new_attr)
 
     def setup_terminal():
         tty.setcbreak(sys.stdin)
+        tty.setraw(sys.stdin)
+        enable_echo(sys.stdin.fileno(), False)
+        atexit.register(enable_echo, sys.stdin.fileno(), True)
 
     def next_char():
         return sys.stdin.read(1).encode()
