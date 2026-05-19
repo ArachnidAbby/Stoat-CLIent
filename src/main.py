@@ -123,9 +123,9 @@ class ConsoleProgram:
         c = 0
         while len(lines) > 0:
             line = lines.pop(0)
-            if len(line) > self.term_size.columns:
+            if len(line) > self.term_size.columns - 4:
                 lines.append(line[self.term_size.columns :])
-                line = "║ " + line[: self.term_size.columns]
+                line = line[: self.term_size.columns]
             if c == 0:
                 self.chat_messages.append("╠ " + line)
             else:
@@ -314,9 +314,7 @@ async def main(client: MyClient):
     client.custom_events = []
     asyncio.run_coroutine_threadsafe(client.start(), asyncio.get_running_loop())
     try:
-        while True:
-            if not console.running:
-                break
+        while console.running:
             while len(client.custom_events) > 0 and (
                 event := client.custom_events.pop()
             ):

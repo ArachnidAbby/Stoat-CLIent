@@ -53,7 +53,7 @@ else:
     def arrow_pressed(key: int):
         if key != 27:
             return False
-        return next_char() == 91
+        return next_char() == 91 and next_char() == 91
 
     def enable_echo(fd, enabled):
         iflag, oflag, cflag, lflag, ispeed, ospeed, cc = termios.tcgetattr(fd)
