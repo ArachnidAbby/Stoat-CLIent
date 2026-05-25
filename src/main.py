@@ -28,9 +28,11 @@ from console_utils import (
     LEFT_ARROW,
     PG_DOWN,
     PG_UP,
+    REVERSE,
     RIGHT_ARROW,
     UP_ARROW,
     arrow_pressed,
+    break_and_wrap_text,
     change_win_title,
     enter_alternative_mode,
     enter_standard_mode,
@@ -43,6 +45,7 @@ from console_utils import (
     RED,
     RESET,
     setup_terminal,
+    visible_len,
 )
 from message_formatting import format_server_message
 
@@ -89,8 +92,7 @@ class ConsoleProgram:
         COMMANDMODE = auto()  # sending commands
 
     def __init__(self, client: MyClient):
-        self.term_size = os.get_terminal_size()
-
+        self.resize()
         self.message_lines = (
             self.term_size.lines - 6
         )  # number of lines of messages we want to display
@@ -110,10 +112,9 @@ class ConsoleProgram:
         self.chat_messages: list[str] = []
         self.total_lines = 0
 
-        self.lines = [" " * self.term_size.columns] * self.term_size.lines
-
         self.client = client
         self.futures = []
+        self.text_buffer_scroll = 0  # starts at beginning of buffer
 
         self.mode = self.Modes.TEXTMODE
 
@@ -161,7 +162,19 @@ class ConsoleProgram:
                 key = ord(char)
                 self.inputs(i, char, key)
 
-            sys.stdout.write("\n".join(self.lines))
+            sys.stdout.write(
+                "\n".join(
+                    line[
+                        0 : min(
+                            self.term_size.columns
+                            - 1
+                            + (len(line) - visible_len(line)),
+                            len(line) - 1,
+                        )
+                    ]
+                    for line in self.lines
+                )
+            )
             sys.stdout.write(
                 f"\u001b[{self.cursor_row + self.term_size.lines-1};{self.cursor_col + 3}H\u001b[?25h"
             )
@@ -186,20 +199,112 @@ class ConsoleProgram:
             )
 
         messages_start = max(
-            (-self.message_lines) + self.scroll_offset - 1, -len(self.chat_messages)
+            (-self.message_lines)
+            + self.scroll_offset
+            - 1
+            - len(break_and_wrap_text(self.chat_buffer, self.term_size.columns - 3)),
+            -len(self.chat_messages),
         )
-        messages_end = messages_start + self.message_lines + len(self.chat_messages) + 1
+
+        messages_end = max(
+            messages_start
+            + self.message_lines
+            + len(self.chat_messages)
+            + 1
+            - len(break_and_wrap_text(self.chat_buffer, self.term_size.columns - 3)),
+            self.min_chat_lines + messages_start,
+        )
+        line_count = messages_end - messages_start
         for c, message in enumerate(self.chat_messages[messages_start:messages_end]):
             self.lines[c + 2] = linify(f"{message}", self.term_size.columns)
 
-        self.lines[self.term_size.lines - 3] = horiz_line(self.term_size.columns)
+        for c in range(0, self.term_size.lines - (line_count + 2)):
+            self.lines[c + line_count + 2] = linify("", self.term_size.columns)
 
-        self.lines[self.term_size.lines - 2] = linify(
-            f"{"»" * (frameno//5 %2) + " " * ((frameno//5-1)%2)} {self.chat_buffer}",
-            self.term_size.columns,
-        )
-        self.lines[self.term_size.lines - 1] = linify(
+        self.lines[
+            self.term_size.lines
+            - 2
+            - min(
+                len(break_and_wrap_text(self.chat_buffer, self.term_size.columns - 3)),
+                self.min_chat_lines,
+            )
+        ] = horiz_line(self.term_size.columns)
+
+        # self.lines[self.text_buffer_line] = linify(
+        #     f"{"»" * (frameno//5 %2) + " " * ((frameno//5-1)%2)} {self.chat_buffer}",
+        #     self.term_size.columns,
+        # )
+        self.lines[self.special_message_line] = linify(
             self.special_message, self.term_size.columns
+        )
+
+        self.draw_text_buffer(line_count, frameno)
+
+    def draw_text_buffer(self, line_count: int, frameno):
+        lines = self.chat_buffer.split("\n")
+        real_lines = len(break_and_wrap_text(self.chat_buffer, self.wrap_len))
+        start = self.text_buffer_scroll
+        # end = min(len(real_lines) - start, self.max_chat_buffer_lines) + start
+        draw_line = (
+            self.term_size.lines - 1 - min(real_lines, self.max_chat_buffer_lines)
+        )  # start line- found from the bottom
+        total_line_counter = 0
+        lines_visited = 0
+        for c, line in enumerate(lines):
+            line += " "
+            # if lines_visited + len(break_and_wrap_text(line, self.wrap_len)) < start:
+            #     lines_visited += len(break_and_wrap_text(line, self.wrap_len))
+            #     continue
+            for c2, sub_line in enumerate(break_and_wrap_text(line, self.wrap_len)):
+                if total_line_counter >= self.max_chat_buffer_lines:
+                    return
+                lines_visited += 1
+                if lines_visited < start:
+                    continue
+                if (
+                    c == self.cursor_row
+                    and len(sub_line) != 0
+                    and self.cursor_col - (c2 * self.wrap_len) < len(sub_line)
+                    and self.cursor_col >= c2 * self.wrap_len
+                ):
+                    cursor_loc = min(
+                        self.cursor_col - c2 * self.wrap_len, len(sub_line) - 1
+                    )
+                    sub_line = (
+                        sub_line[:cursor_loc]
+                        + REVERSE
+                        + sub_line[cursor_loc]
+                        + RESET
+                        + sub_line[cursor_loc + 1 :]
+                    )
+                if c == 0 and c2 == 0:
+                    sub_line = (
+                        f"{"»" * (frameno//5 %2) + " " * ((frameno//5-1)%2)} {sub_line}"
+                    )
+                else:
+                    sub_line = f"  {sub_line}"
+                self.lines[draw_line + total_line_counter] = linify(
+                    f"{start + total_line_counter}{sub_line}",
+                    self.term_size.columns,
+                )
+                total_line_counter += 1
+
+        self.special_message = f"{draw_line=} {self.text_buffer_scroll=} {start=} {self.cursor_col=} {self.cursor_row=} {self.max_chat_buffer_lines=}"
+
+    def resize(self):
+        """Changes the internal state to reflect the new terminal size."""
+        self.term_size = os.get_terminal_size()
+        # self.wrap_len = self.term_size.columns - 3
+        self.wrap_len = 25
+
+        self.lines = [" " * self.term_size.columns] * self.term_size.lines
+        # individual elements
+        self.text_buffer_line = self.term_size.lines - 2
+        self.horiz_rule_line = self.term_size.lines - 3
+        self.special_message_line = self.term_size.lines - 1
+        self.min_chat_lines = min(5, self.term_size.lines)
+        self.max_chat_buffer_lines = max(
+            self.term_size.lines - self.min_chat_lines - 6, 1
         )
 
     def stop_typing(self):
@@ -212,7 +317,9 @@ class ConsoleProgram:
 
     def send_chat_buffer(self):
         if self.mode == ConsoleProgram.Modes.COMMANDMODE:
-            if self.chat_buffer.lower() == "servers":
+            if self.chat_buffer.lower() == "resize":
+                self.resize()
+            elif self.chat_buffer.lower() == "servers":
                 self.add_chat_message(
                     "Servers:\n- "
                     + "\n- ".join(
@@ -288,9 +395,42 @@ class ConsoleProgram:
             elif key == RIGHT_ARROW:  # right arrow
                 self.cursor_col = min(self.cursor_col + 1, len(self.chat_buffer))
             elif key == UP_ARROW:  # up arrow
-                self.cursor_row = max(self.cursor_row - 1, 0)
+                lines = self.chat_buffer.split("\n")
+                for c, line in enumerate(lines):
+                    if self.cursor_row == c:
+                        sub_lines = break_and_wrap_text(line, self.wrap_len)
+                        if len(sub_lines) > 1 and self.cursor_col >= self.wrap_len:
+                            self.cursor_col = max(self.cursor_col - self.wrap_len, 0)
+                        elif len(sub_lines) > 1:
+                            self.cursor_col = 0
+                        else:
+                            self.cursor_row = max(self.cursor_row - 1, 0)
+                            if (
+                                self.cursor_row
+                                < self.text_buffer_scroll + self.max_chat_buffer_lines
+                            ):
+                                self.text_buffer_scroll = self.cursor_row
+                        break
             elif key == DOWN_ARROW:  # down arrow
-                self.cursor_row = min(self.cursor_row + 1, self.chat_buffer.count("\n"))
+                lines = self.chat_buffer.split("\n")
+                for c, line in enumerate(lines):
+                    if self.cursor_row == c:
+                        sub_lines = break_and_wrap_text(line, self.wrap_len)
+                        if (
+                            len(sub_lines) > 1
+                            and self.cursor_col <= len(line) - self.wrap_len
+                        ):
+                            self.cursor_col += self.wrap_len
+                        elif len(sub_lines) > 1:
+                            self.cursor_col = len(line)
+                        else:
+                            self.cursor_row = min(self.cursor_row + 1, len(lines) - 1)
+                            if (
+                                self.cursor_row
+                                > self.text_buffer_scroll + self.max_chat_buffer_lines
+                            ):
+                                self.text_buffer_scroll = self.cursor_row
+                        break
             elif key == PG_UP:  # pgup
                 self.scroll_offset -= 1
             elif key == PG_DOWN:  # pgdown
@@ -301,13 +441,24 @@ class ConsoleProgram:
             if len(self.chat_buffer) == 1:
                 self.stop_typing()
             self.cursor_col -= 1
+            previous = len(break_and_wrap_text(self.chat_buffer, self.wrap_len))
             self.chat_buffer = self.chat_buffer[0:-1]
+            after = len(break_and_wrap_text(self.chat_buffer, self.wrap_len))
+            if previous > after and previous >= self.max_chat_buffer_lines - 1:
+                self.text_buffer_scroll = max(self.text_buffer_scroll - 1, 0)
+
         elif 126 >= key >= 32:
             self.start_typing()
+            previous = len(break_and_wrap_text(self.chat_buffer, self.wrap_len))
             self.chat_buffer += char.decode("latin-1")
+            after = len(break_and_wrap_text(self.chat_buffer, self.wrap_len))
+            if (
+                after > previous and previous >= self.max_chat_buffer_lines - 1
+            ):  # new lines added:
+                self.text_buffer_scroll += 1
             self.cursor_col += 1
 
-        self.special_message = f"{char}: {key} || {self.mode.name}"
+        self.special_message = f"{char}: {key} || {self.mode.name} {self.cursor_col=} {self.cursor_row=} {self.text_buffer_scroll=}"
 
 
 async def main(client: MyClient):
