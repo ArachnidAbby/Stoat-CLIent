@@ -293,8 +293,8 @@ class ConsoleProgram:
     def resize(self):
         """Changes the internal state to reflect the new terminal size."""
         self.term_size = os.get_terminal_size()
-        # self.wrap_len = self.term_size.columns - 3
-        self.wrap_len = 8
+        self.wrap_len = self.term_size.columns // 2
+        # self.wrap_len = 8
 
         self.lines = [" " * self.term_size.columns] * self.term_size.lines
         # individual elements
@@ -447,9 +447,21 @@ class ConsoleProgram:
         elif key == BACKSPACE and len(self.chat_buffer) > 0:  # backspace
             if len(self.chat_buffer) == 1:
                 self.stop_typing()
-            self.cursor_col -= 1
             previous = len(break_and_wrap_text(self.chat_buffer, self.wrap_len))
-            self.chat_buffer = self.chat_buffer[0:-1]
+            if self.cursor_col >= len(self.chat_buffer):
+                self.chat_buffer = self.chat_buffer[0:-1]
+            else:
+                lines = self.chat_buffer.split("\n")
+                if self.cursor_col >= len(lines[self.cursor_row]):
+                    lines[self.cursor_row] = lines[self.cursor_row][0:-1]
+                else:
+                    lines[self.cursor_row] = (
+                        lines[self.cursor_row][: self.cursor_col - 1]
+                        + lines[self.cursor_row][self.cursor_col :]
+                    )
+                self.chat_buffer = "\n".join(lines)
+            self.cursor_col -= 1
+
             after = len(break_and_wrap_text(self.chat_buffer, self.wrap_len))
             if previous > after and previous >= self.max_chat_buffer_lines - 1:
                 self.text_buffer_scroll = max(self.text_buffer_scroll - 1, 0)
@@ -457,7 +469,19 @@ class ConsoleProgram:
         elif 126 >= key >= 32:
             self.start_typing()
             previous = len(break_and_wrap_text(self.chat_buffer, self.wrap_len))
-            self.chat_buffer += char.decode("latin-1")
+            if self.cursor_col >= len(self.chat_buffer):
+                self.chat_buffer += char.decode("latin-1")
+            else:
+                lines = self.chat_buffer.split("\n")
+                if self.cursor_col >= len(lines[self.cursor_row]):
+                    lines[self.cursor_row] += char.decode("latin-1")
+                else:
+                    lines[self.cursor_row] = (
+                        lines[self.cursor_row][: self.cursor_col]
+                        + char.decode("latin-1")
+                        + lines[self.cursor_row][self.cursor_col :]
+                    )
+                self.chat_buffer = "\n".join(lines)
             after = len(break_and_wrap_text(self.chat_buffer, self.wrap_len))
             if (
                 after > previous and previous >= self.max_chat_buffer_lines - 1
