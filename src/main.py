@@ -5,11 +5,14 @@ import sys
 import threading
 import time
 import tomllib
+import traceback
+from typing import TextIO
 
 from comprehensiveconfig import ConfigSpec, TomlWriter, spec
 import pyperclip
 from stoat import (
     Channel,
+    ChannelStartTypingEvent,
     Client,
     DMChannel,
     Member,
@@ -17,9 +20,11 @@ from stoat import (
     NotFound,
     OwnUser,
     Server,
+    ServerChannel,
     TextChannel,
     TextableChannel,
 )
+import stoat
 
 from console_utils import (
     BACKSPACE,
@@ -73,17 +78,63 @@ if platform.system() == "Windows":
 
 
 class MyClient(Client):
-    async def on_ready(self, _, /):
-        console.add_chat_message(f"Logged on as {self.me}")
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         self.custom_events = []
+        self.filter_channel: Channel | None = None
+        self.filter_server: Server | None = None
+        self.unread_dms = []
+
+    async def on_ready(self, _, /):
+        console.add_chat_message(f"Logged on as {self.me}")
 
     async def on_message(self, message: Message, /):
         if self.me is None:
             return
+        if isinstance(message.channel, DMChannel):
+            self.unread_dms.append(message)
+
+        if (
+            self.filter_server is not None
+            and message.server.id != self.filter_server.id
+        ):
+            return
+        if (
+            self.filter_channel is not None
+            and message.channel.id != self.filter_channel.id
+        ):
+            return
 
         msg = format_server_message(self.me, message, AppConfig.compact_mode)
         console.add_chat_message(msg)
+
+    async def on_channel_start_typing(self, arg: ChannelStartTypingEvent):
+        if self.filter_server is None:
+            return
+        if self.filter_channel is None or arg.channel_id != self.filter_channel.id:
+            return
+        console.typing_users.append(self.filter_server.get_member(arg.user_id))
+
+    async def dump_history(self, channel: ServerChannel):
+        if self.me is None or self.filter_server is None:
+            return
+
+        messages = await channel.history(limit=100, populate_users=True)
+
+        for message in messages[::-1]:
+            msg = format_server_message(self.me, message, AppConfig.compact_mode)
+            console.add_chat_message(msg)
+
+    async def load_server(self, server):
+        pass
+        # members = await server.fetch_members()
+
+        # self.state._cache.bulk_store_server_members(
+        #     server.id,
+        #     {member.id: member for member in members},
+        #     None,
+        # )
 
 
 class ConsoleProgram:
@@ -115,6 +166,7 @@ class ConsoleProgram:
         self.client = client
         self.futures = []
         self.text_buffer_scroll = 0  # starts at beginning of buffer
+        self.typing_users = []
 
         self.mode = self.Modes.TEXTMODE
 
@@ -176,7 +228,7 @@ class ConsoleProgram:
                 )
             )
             sys.stdout.write(
-                f"\u001b[{self.cursor_row + self.term_size.lines-1};{self.cursor_col + 3}H\u001b[?25h"
+                f"\u001b[{self.cursor_row + self.term_size.lines-1};{self.cursor_col + 3}H"  # \u001b[?25h
             )
 
             time.sleep(0.05)
@@ -191,18 +243,26 @@ class ConsoleProgram:
 
         self.last_line_count = self.total_lines
 
-        self.lines[0] = linify(f"{self.scroll_offset} > ? # ?", self.term_size.columns)
+        self.lines[0] = linify(
+            f"{self.scroll_offset} > ? # ? | DM's: {len(self.client.unread_dms)}",
+            self.term_size.columns,
+        )
         if self.server is not None:
             self.lines[0] = linify(
-                f"{self.scroll_offset} > {self.server.name} # {"?" if self.active_channel is None else self.active_channel.name}",
+                f"{self.scroll_offset} > {self.server.name} # {"?" if self.active_channel is None else self.active_channel.name} | DM's: {len(self.client.unread_dms)}",
                 self.term_size.columns,
             )
 
+        dot_count = frameno // 4 % 4
+        self.lines[1] = linify(
+            f"{'.'*dot_count}{' '* (3-dot_count)} {", ".join(self.typing_users)}",
+            self.term_size.columns,
+        )
+
         messages_start = max(
-            (-self.message_lines)
-            + self.scroll_offset
-            - 1
-            - len(break_and_wrap_text(self.chat_buffer, self.term_size.columns - 3)),
+            (-self.message_lines) + self.scroll_offset
+            # - 1
+            - len(break_and_wrap_text(self.chat_buffer, self.wrap_len)),
             -len(self.chat_messages),
         )
 
@@ -210,15 +270,17 @@ class ConsoleProgram:
             messages_start
             + self.message_lines
             + len(self.chat_messages)
-            + 1
-            - len(break_and_wrap_text(self.chat_buffer, self.term_size.columns - 3)),
+            + 2
+            - len(break_and_wrap_text(self.chat_buffer, self.wrap_len)),
             self.min_chat_lines + messages_start,
         )
         line_count = messages_end - messages_start
         for c in range(0, self.horiz_rule_line - 2):
             self.lines[c + 2] = linify("", self.term_size.columns)
 
-        for c, message in enumerate(self.chat_messages[messages_start:messages_end]):
+        for c, message in enumerate(
+            self.chat_messages[messages_start : messages_end + 1]
+        ):
             self.lines[c + 2] = linify(f"{message}", self.term_size.columns)
 
         self.lines[
@@ -349,6 +411,10 @@ class ConsoleProgram:
                         self.server = list(self.client.servers.values())[
                             int(self.chat_buffer.removeprefix("> "))
                         ]
+                    else:
+                        return
+                self.client.filter_server = self.server
+                self.client.custom_events.append(self.client.load_server(self.server))
             elif self.chat_buffer.startswith("# ") and self.server is not None:
                 for channel in self.server.channels:
                     if channel.name == self.chat_buffer.removeprefix("# "):
@@ -363,6 +429,12 @@ class ConsoleProgram:
                         self.active_channel = self.server.channels[
                             int(self.chat_buffer.removeprefix("# "))
                         ]
+                    else:
+                        return
+                self.client.filter_channel = self.active_channel
+                self.client.custom_events.append(
+                    self.client.dump_history(self.active_channel)
+                )
             elif self.chat_buffer == "q":
                 self.running = False
         elif (
@@ -497,14 +569,16 @@ async def main(client: MyClient):
     asyncio.run_coroutine_threadsafe(client.start(), asyncio.get_running_loop())
     try:
         while console.running:
-            while len(client.custom_events) > 0 and (
-                event := client.custom_events.pop()
-            ):
+            while len(client.custom_events) > 0:
+                event = client.custom_events.pop(0)
                 try:
                     res = await event
                     if AppConfig.debug:
-                        console.add_chat_message(str())
+                        console.add_chat_message(str(res))
                 except Exception as e:
+                    _, _, tb = sys.exc_info()
+                    traceback.print_tb(tb)
+                    quit()
                     console.add_chat_message(f"{RED}ERROR:\n" + str(e) + RESET)
 
             await asyncio.sleep(0)
