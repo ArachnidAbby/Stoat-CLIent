@@ -215,11 +215,11 @@ class ConsoleProgram:
             self.min_chat_lines + messages_start,
         )
         line_count = messages_end - messages_start
+        for c in range(0, self.horiz_rule_line - 2):
+            self.lines[c + 2] = linify("", self.term_size.columns)
+
         for c, message in enumerate(self.chat_messages[messages_start:messages_end]):
             self.lines[c + 2] = linify(f"{message}", self.term_size.columns)
-
-        for c in range(0, self.term_size.lines - (line_count + 2)):
-            self.lines[c + line_count + 2] = linify("", self.term_size.columns)
 
         self.lines[
             self.term_size.lines
@@ -244,7 +244,6 @@ class ConsoleProgram:
         lines = self.chat_buffer.split("\n")
         real_lines = len(break_and_wrap_text(self.chat_buffer, self.wrap_len))
         start = self.text_buffer_scroll
-        # end = min(len(real_lines) - start, self.max_chat_buffer_lines) + start
         draw_line = (
             self.term_size.lines - 1 - min(real_lines, self.max_chat_buffer_lines)
         )  # start line- found from the bottom
@@ -252,15 +251,15 @@ class ConsoleProgram:
         lines_visited = 0
         for c, line in enumerate(lines):
             line += " "
-            # if lines_visited + len(break_and_wrap_text(line, self.wrap_len)) < start:
-            #     lines_visited += len(break_and_wrap_text(line, self.wrap_len))
-            #     continue
             for c2, sub_line in enumerate(break_and_wrap_text(line, self.wrap_len)):
+                # early return if we have no more lines to draw
                 if total_line_counter >= self.max_chat_buffer_lines:
                     return
+                # skip drawing this line if we haven't reached our start line yet
                 lines_visited += 1
                 if lines_visited < start:
                     continue
+                # add highlights
                 if (
                     c == self.cursor_row
                     and len(sub_line) != 0
@@ -277,25 +276,25 @@ class ConsoleProgram:
                         + RESET
                         + sub_line[cursor_loc + 1 :]
                     )
+
                 if c == 0 and c2 == 0:
                     sub_line = (
                         f"{"»" * (frameno//5 %2) + " " * ((frameno//5-1)%2)} {sub_line}"
                     )
                 else:
                     sub_line = f"  {sub_line}"
+
                 self.lines[draw_line + total_line_counter] = linify(
                     f"{start + total_line_counter}{sub_line}",
                     self.term_size.columns,
                 )
                 total_line_counter += 1
 
-        self.special_message = f"{draw_line=} {self.text_buffer_scroll=} {start=} {self.cursor_col=} {self.cursor_row=} {self.max_chat_buffer_lines=}"
-
     def resize(self):
         """Changes the internal state to reflect the new terminal size."""
         self.term_size = os.get_terminal_size()
         # self.wrap_len = self.term_size.columns - 3
-        self.wrap_len = 25
+        self.wrap_len = 8
 
         self.lines = [" " * self.term_size.columns] * self.term_size.lines
         # individual elements
@@ -401,15 +400,20 @@ class ConsoleProgram:
                         sub_lines = break_and_wrap_text(line, self.wrap_len)
                         if len(sub_lines) > 1 and self.cursor_col >= self.wrap_len:
                             self.cursor_col = max(self.cursor_col - self.wrap_len, 0)
-                        elif len(sub_lines) > 1:
+                        elif len(sub_lines) > 1 and self.text_buffer_scroll == 0:
                             self.cursor_col = 0
                         else:
                             self.cursor_row = max(self.cursor_row - 1, 0)
-                            if (
-                                self.cursor_row
-                                < self.text_buffer_scroll + self.max_chat_buffer_lines
-                            ):
+                            if self.cursor_row < self.text_buffer_scroll:
                                 self.text_buffer_scroll = self.cursor_row
+                        if (
+                            len(sub_lines) > 1
+                            and c + self.cursor_col // self.wrap_len
+                            < self.text_buffer_scroll
+                        ):
+                            self.text_buffer_scroll = (
+                                c + self.cursor_col // self.wrap_len
+                            )
                         break
             elif key == DOWN_ARROW:  # down arrow
                 lines = self.chat_buffer.split("\n")
@@ -425,11 +429,14 @@ class ConsoleProgram:
                             self.cursor_col = len(line)
                         else:
                             self.cursor_row = min(self.cursor_row + 1, len(lines) - 1)
-                            if (
-                                self.cursor_row
-                                > self.text_buffer_scroll + self.max_chat_buffer_lines
-                            ):
+                            if self.cursor_row > self.text_buffer_scroll:
                                 self.text_buffer_scroll = self.cursor_row
+                        if (
+                            len(sub_lines) > 1
+                            and c + self.cursor_col // self.wrap_len
+                            >= self.text_buffer_scroll + self.max_chat_buffer_lines - 1
+                        ):
+                            self.text_buffer_scroll += 1
                         break
             elif key == PG_UP:  # pgup
                 self.scroll_offset -= 1
